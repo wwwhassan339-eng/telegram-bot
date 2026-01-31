@@ -1,83 +1,115 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+import os
 
-# =======================
-# 🔑 التوكن الخاص بالبوت
-BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع التوكن هنا بين علامتي اقتباس
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع التوكن هنا
+ADMIN_ID = 643482335  # ضع رقمك هنا
 
-# 🛡️ رقم أدمن البوت (أنت فقط)
-ADMIN_ID = 643482335  # ضع رقم حسابك هنا
-
-# =======================
-# النصوص الخاصة بالأزرار
-# كل زر: الاسم الداخلي للزر + النص الذي يراه الطالب
-# يمكنك إضافة أي زر جديد أو حذف أي زر لاحقًا من تيليجرام باستخدام /set
+# ==========================
+# نصوص الأزرار والملفات
 BUTTON_REPLIES = {
-    "info": "ℹ️ معلومات عن البوت: هذا بوت مجاني للطلاب",
-    "help": "❓ تعليمات: اضغط على الأزرار لاختيار المحاضرات أو التواصل",
-    "contact": "📞 للتواصل: @YourUsername",
-    "lectures": "📚 المحاضرات:\n1️⃣ محاضرة الوراثة\n2️⃣ محاضرة الأحياء المجهرية\n3️⃣ محاضرة الكيمياء الحيوية"
+    "info": {"text": "ℹ️ معلومات عن البوت: مجاني للطلاب", "file": None},
+    "help": {"text": "❓ تعليمات: اضغط على الأزرار لاختيار المحاضرات أو التواصل", "file": None},
+    "contact": {"text": "📞 للتواصل: @YourUsername", "file": None}
 }
 
-# =======================
-# أمر /start
+TEMP_KEY = None  # مؤقت للاسم الداخلي
+TEMP_FILE = None  # مؤقت للملف المرفوع
+
+# ==========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     row = []
 
-    # إنشاء الأزرار تلقائيًا من BUTTON_REPLIES
+    # إضافة أزرار الطلاب
     for key, data in BUTTON_REPLIES.items():
-        # الاسم الذي يظهر على الزر هو أول سطر من النص
-        first_line = data.split("\n")[0]
-        row.append(InlineKeyboardButton(first_line, callback_data=key))
-        if len(row) == 2:  # صفين لكل صفين أزرار
+        row.append(InlineKeyboardButton(data["text"].split("\n")[0], callback_data=key))
+        if len(row) == 2:
             keyboard.append(row)
             row = []
     if row:
         keyboard.append(row)
 
+    # أزرار الأدمن
+    if update.effective_user.id == ADMIN_ID:
+        admin_row = [
+            InlineKeyboardButton("➕ إضافة زر جديد", callback_data="add_new"),
+            InlineKeyboardButton("📝 تعديل زر موجود", callback_data="edit_existing"),
+            InlineKeyboardButton("❌ حذف زر", callback_data="delete_existing")
+        ]
+        keyboard.append(admin_row)
+
     reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("👋 أهلاً! اختر زرًا 👇", reply_markup=reply_markup)
 
-    await update.message.reply_text(
-        "👋 أهلاً بك في البوت!\nاختر أحد الأزرار 👇",
-        reply_markup=reply_markup
-    )
-
-# =======================
-# التعامل مع الضغط على الأزرار
+# ==========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global TEMP_KEY, TEMP_FILE
     query = update.callback_query
     await query.answer()
+    user_id = query.from_user.id
+    data = query.data
 
-    if query.data in BUTTON_REPLIES:
-        await query.edit_message_text(BUTTON_REPLIES[query.data])
+    # أزرار الأدمن
+    if user_id == ADMIN_ID:
+        if data == "add_new":
+            TEMP_KEY = None
+            TEMP_FILE = None
+            await query.message.reply_text("✏️ أرسل اسم الزر الجديد:")
+            return
+        elif data == "edit_existing":
+            await query.message.reply_text("✏️ أرسل الاسم الداخلي للزر الذي تريد تعديله:")
+            return
+        elif data == "delete_existing":
+            await query.message.reply_text("✏️ أرسل الاسم الداخلي للزر الذي تريد حذفه:")
+            return
 
-# =======================
-# أمر /set لتغيير نصوص الأزرار من داخل البوت (أنت فقط)
-async def set_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return  # أي شخص آخر لا يستطيع التحكم
+    # زر موجود → إرسال النص أو الملف
+    if data in BUTTON_REPLIES:
+        info = BUTTON_REPLIES[data]
+        if info["file"]:
+            await query.message.reply_document(InputFile(info["file"]), caption=info["text"])
+        else:
+            await query.edit_message_text(info["text"])
 
-    if len(context.args) < 2:
-        await update.message.reply_text("الاستخدام:\n/set اسم_الزر النص_الجديد")
+# ==========================
+# استقبال رسائل الأدمن للنصوص والملفات
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global TEMP_KEY, TEMP_FILE
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    if user_id != ADMIN_ID:
         return
 
-    key = context.args[0]
-    new_text = " ".join(context.args[1:])
+    # إذا أرسل ملف PDF
+    if update.message.document:
+        TEMP_FILE = await update.message.document.get_file()
+        file_path = f"files/{update.message.document.file_name}"
+        os.makedirs("files", exist_ok=True)
+        await TEMP_FILE.download_to_drive(file_path)
+        TEMP_FILE = file_path
+        await update.message.reply_text(f"✅ تم رفع الملف '{update.message.document.file_name}'. أرسل النص الذي تريد عرضه مع الزر:")
+        return
 
-    if key in BUTTON_REPLIES:
-        BUTTON_REPLIES[key] = new_text
-        await update.message.reply_text("✅ تم التعديل بنجاح")
+    # إذا لم يكن هناك اسم مؤقت → أخذ الاسم الداخلي للزر
+    if TEMP_KEY is None:
+        TEMP_KEY = text
+        await update.message.reply_text(f"✅ الاسم محفوظ. الآن أرسل النص الذي تريد عرضه عند الضغط على الزر '{TEMP_KEY}':")
     else:
-        await update.message.reply_text("❌ هذا الزر غير موجود، تحقق من الاسم الداخلي للزر")
+        # حفظ الزر الجديد أو التعديل
+        BUTTON_REPLIES[TEMP_KEY] = {"text": text, "file": TEMP_FILE}
+        TEMP_KEY = None
+        TEMP_FILE = None
+        await update.message.reply_text("✅ تم حفظ الزر بنجاح! استخدم /start لرؤية الزر الجديد.")
 
-# =======================
-# تشغيل البوت
+# ==========================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(CommandHandler("set", set_text))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_message))
     print("البوت يعمل الآن...")
     app.run_polling()
 
