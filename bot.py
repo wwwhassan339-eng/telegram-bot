@@ -4,13 +4,13 @@ import os
 import json
 
 BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع توكن البوت هنا
-ADMIN_ID = 643482335  # ضع رقمك هنا
+MAIN_ADMIN_ID = 643482335  # أدمن رئيسي
 
-# ==========================
-# بيانات البوت
 DATA_FILE = "buttons.json"
 USERS_FILE = "users.json"
+ADMINS_FILE = "admins.json"
 
+# ==========================
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         BUTTON_REPLIES = json.load(f)
@@ -23,13 +23,21 @@ if os.path.exists(USERS_FILE):
 else:
     USERS = {}
 
+if os.path.exists(ADMINS_FILE):
+    with open(ADMINS_FILE, "r", encoding="utf-8") as f:
+        ADMINS = json.load(f)
+else:
+    ADMINS = {str(MAIN_ADMIN_ID): {"permissions":["add","edit","delete","stats","manage_admins"]}}
+
+# ==========================
 TEMP_CATEGORY = None
 TEMP_KEY = None
 TEMP_FILE = None
 EDIT_CATEGORY = None
 EDIT_KEY = None
 EDIT_OPTION = None
-CURRENT_MENU = "main"
+TEMP_ADMIN_ID = None
+TEMP_ADMIN_PERMS = []
 
 # ==========================
 def save_buttons():
@@ -40,36 +48,42 @@ def save_users():
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(USERS, f, ensure_ascii=False, indent=2)
 
+def save_admins():
+    with open(ADMINS_FILE, "w", encoding="utf-8") as f:
+        json.dump(ADMINS, f, ensure_ascii=False, indent=2)
+
+# ==========================
+def has_permission(user_id, perm):
+    return str(user_id) in ADMINS and perm in ADMINS[str(user_id)]["permissions"]
+
 # ==========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_main_menu(update, context)
 
-# ==========================
 async def show_main_menu(update, context, message=None):
     keyboard = []
     row = []
 
-    # أزرار الفئات للطلاب
     for category in BUTTON_REPLIES.keys():
         row.append(InlineKeyboardButton(category, callback_data=f"cat_{category}"))
-        if len(row) == 2:
+        if len(row)==2:
             keyboard.append(row)
-            row = []
+            row=[]
     if row:
         keyboard.append(row)
 
-    # أزرار الأدمن
-    if update.effective_user.id == ADMIN_ID:
+    if str(update.effective_user.id) in ADMINS:
         admin_row = [
             InlineKeyboardButton("➕ إضافة فئة جديدة", callback_data="add_category"),
             InlineKeyboardButton("📝 تعديل فئة/زر", callback_data="edit_category"),
             InlineKeyboardButton("❌ حذف فئة/زر", callback_data="delete_category"),
-            InlineKeyboardButton("📊 إحصائيات البوت", callback_data="stats")
+            InlineKeyboardButton("📊 إحصائيات البوت", callback_data="stats"),
+            InlineKeyboardButton("👑 إدارة الأدمن", callback_data="manage_admins")
         ]
         keyboard.append(admin_row)
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    text = "👋 أهلاً! اختر فئة 👇" if update.effective_user.id != ADMIN_ID else "👑 واجهة الأدمن: اختر فئة أو إدارة"
+    text = "👋 أهلاً! اختر فئة 👇" if str(update.effective_user.id) not in ADMINS else "👑 واجهة الأدمن: اختر فئة أو إدارة"
     if message:
         await message.edit_text(text, reply_markup=reply_markup)
     elif update.message:
@@ -80,6 +94,7 @@ async def show_main_menu(update, context, message=None):
 # ==========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY, EDIT_OPTION
+    global TEMP_ADMIN_ID, TEMP_ADMIN_PERMS
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
@@ -91,181 +106,133 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                "first_name": query.from_user.first_name,
                                "last_name": query.from_user.last_name or ""}
         save_users()
+        # إشعار للأدمن الرئيسي
         await context.bot.send_message(
-            chat_id=ADMIN_ID,
+            chat_id=MAIN_ADMIN_ID,
             text=f"🆕 مستخدم جديد دخل البوت:\nID: {user_id}\nيوزر: @{query.from_user.username}\nالاسم: {query.from_user.first_name} {query.from_user.last_name or ''}"
         )
 
     # --------------------
-    # أزرار الأدمن
-    if user_id == ADMIN_ID:
-        if data == "add_category":
+    # الأدمنين
+    if str(user_id) in ADMINS:
+        # إضافة فئة
+        if data=="add_category" and has_permission(user_id,"add"):
             TEMP_CATEGORY = None
             await query.message.reply_text("✏️ أرسل اسم الفئة الجديدة:")
             return
-        elif data == "edit_category":
-            keyboard = [[InlineKeyboardButton(cat, callback_data=f"editcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
-            keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
+        # تعديل فئة
+        elif data=="edit_category" and has_permission(user_id,"edit"):
+            keyboard=[[InlineKeyboardButton(cat,callback_data=f"editcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
+            keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
             await query.message.reply_text("اختر الفئة لتعديلها:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
-        elif data == "delete_category":
-            keyboard = [[InlineKeyboardButton(cat, callback_data=f"delcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
-            keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
+        # حذف فئة
+        elif data=="delete_category" and has_permission(user_id,"delete"):
+            keyboard=[[InlineKeyboardButton(cat,callback_data=f"delcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
+            keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
             await query.message.reply_text("اختر الفئة للحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
-        elif data == "stats":
-            num_users = len(USERS)
-            num_categories = len(BUTTON_REPLIES)
-            total_buttons = sum(len(v) for v in BUTTON_REPLIES.values())
-            usernames = [f"@{v['username']}" for v in USERS.values() if v['username']]
-            stats_text = f"📊 إحصائيات البوت:\nعدد المستخدمين: {num_users}\nعدد الفئات: {num_categories}\nعدد الأزرار: {total_buttons}\nالمستخدمون:\n" + "\n".join(usernames)
+        # الإحصائيات
+        elif data=="stats" and has_permission(user_id,"stats"):
+            num_users=len(USERS)
+            num_categories=len(BUTTON_REPLIES)
+            total_buttons=sum(len(v) for v in BUTTON_REPLIES.values())
+            usernames=[f"@{v['username']}" for v in USERS.values() if v['username']]
+            stats_text=f"📊 إحصائيات البوت:\nعدد المستخدمين:{num_users}\nعدد الفئات:{num_categories}\nعدد الأزرار:{total_buttons}\nالمستخدمون:\n"+"\n".join(usernames)
             await query.message.reply_text(stats_text)
             return
-
-        elif data.startswith("editcat_"):
-            EDIT_CATEGORY = data.replace("editcat_", "")
-            keyboard = [[InlineKeyboardButton("➕ إضافة زر جديد", callback_data="add_button")],
-                        [InlineKeyboardButton("📝 تعديل زر موجود", callback_data="edit_button")],
-                        [InlineKeyboardButton("❌ حذف زر", callback_data="delete_button")],
-                        [InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
-            await query.message.reply_text(f"اختر العملية للفئة '{EDIT_CATEGORY}':", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-
-        elif data.startswith("delcat_"):
-            del_cat = data.replace("delcat_", "")
-            if del_cat in BUTTON_REPLIES:
-                BUTTON_REPLIES.pop(del_cat)
-                save_buttons()
-                await query.message.reply_text(f"✅ تم حذف الفئة '{del_cat}' بنجاح")
-            return
-
-        elif data in ["add_button", "edit_button", "delete_button"]:
-            if data == "add_button":
-                TEMP_KEY = None
-                TEMP_FILE = None
-                await query.message.reply_text(f"✏️ أرسل اسم الزر الجديد للفئة '{EDIT_CATEGORY}':")
-            elif data == "edit_button":
-                keyboard = [[InlineKeyboardButton(k, callback_data=f"editbtn_{k}")] for k in BUTTON_REPLIES.get(EDIT_CATEGORY, {}).keys()]
-                keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
-                await query.message.reply_text("اختر الزر لتعديله:", reply_markup=InlineKeyboardMarkup(keyboard))
-            elif data == "delete_button":
-                keyboard = [[InlineKeyboardButton(k, callback_data=f"delbtn_{k}")] for k in BUTTON_REPLIES.get(EDIT_CATEGORY, {}).keys()]
-                keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
-                await query.message.reply_text("اختر الزر للحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-
-        elif data.startswith("editbtn_"):
-            EDIT_KEY = data.replace("editbtn_", "")
-            keyboard = [
-                [InlineKeyboardButton("تعديل الاسم", callback_data="edit_name")],
-                [InlineKeyboardButton("تعديل النص", callback_data="edit_text")],
-                [InlineKeyboardButton("تعديل الملف", callback_data="edit_file")],
+        # إدارة الأدمن
+        elif data=="manage_admins" and has_permission(user_id,"manage_admins"):
+            keyboard=[
+                [InlineKeyboardButton("➕ إضافة أدمن", callback_data="add_new_admin")],
+                [InlineKeyboardButton("❌ حذف أدمن", callback_data="del_admin")],
                 [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
             ]
-            await query.message.reply_text(f"اختر ما تريد تعديله للزر '{EDIT_KEY}':", reply_markup=InlineKeyboardMarkup(keyboard))
+            await query.message.reply_text("👑 إدارة الأدمن: اختر العملية:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
-
-        elif data.startswith("delbtn_"):
-            del_key = data.replace("delbtn_", "")
-            if del_key in BUTTON_REPLIES.get(EDIT_CATEGORY, {}):
-                BUTTON_REPLIES[EDIT_CATEGORY].pop(del_key)
-                save_buttons()
-                await query.message.reply_text(f"✅ تم حذف الزر '{del_key}' بنجاح")
+        elif data=="add_new_admin":
+            await query.message.reply_text("✏️ أرسل رقم الـ ID للأدمن الجديد:")
+            TEMP_ADMIN_ID = None
+            TEMP_ADMIN_PERMS=[]
             return
-
-        elif data in ["edit_name", "edit_text", "edit_file"]:
-            EDIT_OPTION = data.split("_")[1]
-            prompt = "✏️ أرسل الاسم الجديد:" if EDIT_OPTION=="name" else "✏️ أرسل النص الجديد:" if EDIT_OPTION=="text" else "📄 أرسل ملف PDF الجديد:"
-            await query.message.reply_text(prompt)
+        elif data=="del_admin":
+            keyboard=[[InlineKeyboardButton(k,callback_data=f"deladmin_{k}")] for k in ADMINS.keys() if k!=str(MAIN_ADMIN_ID)]
+            keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
+            await query.message.reply_text("اختر الأدمن للحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
-
-        elif data == "back":
-            TEMP_CATEGORY = None
-            TEMP_KEY = None
-            EDIT_CATEGORY = None
-            EDIT_KEY = None
-            EDIT_OPTION = None
-            await show_main_menu(update, context)
+        elif data.startswith("deladmin_"):
+            del_id=data.replace("deladmin_","")
+            if del_id in ADMINS:
+                ADMINS.pop(del_id)
+                save_admins()
+                await query.message.reply_text(f"✅ تم حذف الأدمن {del_id}")
             return
 
     # --------------------
-    # أزرار الطلاب
+    # الطلاب والفئات
     if data.startswith("cat_"):
-        category = data.replace("cat_", "")
-        keyboard = [[InlineKeyboardButton(k, callback_data=f"userbtn_{category}_{k}")] for k in BUTTON_REPLIES.get(category, {}).keys()]
-        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
+        category=data.replace("cat_","")
+        keyboard=[[InlineKeyboardButton(k,callback_data=f"userbtn_{category}_{k}")] for k in BUTTON_REPLIES.get(category,{}).keys()]
+        keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
         await query.message.edit_text(f"📂 فئة: {category}", reply_markup=InlineKeyboardMarkup(keyboard))
         return
-
     if data.startswith("userbtn_"):
-        parts = data.replace("userbtn_", "").split("_",1)
-        category = parts[0]
-        key = parts[1]
-        info = BUTTON_REPLIES.get(category, {}).get(key, {})
+        parts=data.replace("userbtn_","").split("_",1)
+        category=parts[0]
+        key=parts[1]
+        info=BUTTON_REPLIES.get(category,{}).get(key,{})
         if info.get("file"):
-            await query.message.reply_document(InputFile(info["file"]), caption=info.get("text",""))
+            file_path=info["file"]
+            file_name=os.path.basename(file_path)
+            await query.message.reply_document(InputFile(file_path, filename=file_name), caption=info.get("text",""))
         else:
             await query.message.edit_text(info.get("text",""))
+        return
+    # زر رجوع
+    if data=="back":
+        await show_main_menu(update, context)
+        return
 
 # ==========================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY, EDIT_OPTION
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
+    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY, EDIT_OPTION, TEMP_ADMIN_ID, TEMP_ADMIN_PERMS
+    user_id=update.effective_user.id
+    if str(user_id) not in ADMINS:
         return
 
     # استقبال ملف PDF
     if update.message.document:
-        TEMP_FILE = await update.message.document.get_file()
-        os.makedirs("files", exist_ok=True)
-        file_path = f"files/{update.message.document.file_name}"
+        TEMP_FILE=await update.message.document.get_file()
+        os.makedirs("files",exist_ok=True)
+        file_path=f"files/{update.message.document.file_name}"
         await TEMP_FILE.download_to_drive(file_path)
-        TEMP_FILE = file_path
-
-        if EDIT_OPTION=="file" and EDIT_CATEGORY and EDIT_KEY:
-            BUTTON_REPLIES[EDIT_CATEGORY][EDIT_KEY]["file"] = TEMP_FILE
-            save_buttons()
-            EDIT_OPTION = None
-            EDIT_KEY = None
-            await update.message.reply_text("✅ تم تعديل الملف بنجاح!")
-        else:
-            await update.message.reply_text("✅ الملف محفوظ، أرسل النص ليكمل الزر.")
+        TEMP_FILE=file_path
+        await update.message.reply_text("✅ تم حفظ الملف، أرسل النص ليكمل الزر أو الفئة.")
         return
 
     # إضافة فئة جديدة
-    if TEMP_CATEGORY is None and EDIT_CATEGORY is None:
-        TEMP_CATEGORY = update.message.text
+    if TEMP_CATEGORY is None:
+        TEMP_CATEGORY=update.message.text
         if TEMP_CATEGORY not in BUTTON_REPLIES:
-            BUTTON_REPLIES[TEMP_CATEGORY] = {}
+            BUTTON_REPLIES[TEMP_CATEGORY]={}
             save_buttons()
-            await update.message.reply_text(f"✅ تم إنشاء الفئة '{TEMP_CATEGORY}' بنجاح! الآن اضغط /start لإضافة أزرار داخلها.")
-        TEMP_CATEGORY = None
+            await update.message.reply_text(f"✅ تم إنشاء الفئة '{TEMP_CATEGORY}' بنجاح! الآن أرسل /start لإضافة أزرار داخلها.")
+        TEMP_CATEGORY=None
         return
 
-    # إضافة زر جديد داخل فئة
-    if EDIT_CATEGORY and TEMP_KEY is None and EDIT_OPTION is None:
-        TEMP_KEY = update.message.text
-        await update.message.reply_text(f"✅ الاسم محفوظ. أرسل النص الذي تريد عرضه عند الضغط على الزر '{TEMP_KEY}':")
+    # إضافة أدمن جديد
+    if TEMP_ADMIN_ID is None and update.message.text.isdigit():
+        TEMP_ADMIN_ID=str(update.message.text)
+        perms_keyboard=[
+            [InlineKeyboardButton("➕ إضافة أزرار",callback_data="perm_add"),
+             InlineKeyboardButton("📝 تعديل أزرار",callback_data="perm_edit")],
+            [InlineKeyboardButton("❌ حذف أزرار",callback_data="perm_delete"),
+             InlineKeyboardButton("📊 إحصائيات",callback_data="perm_stats")],
+            [InlineKeyboardButton("👑 إدارة أدمن",callback_data="perm_admins")],
+            [InlineKeyboardButton("✅ إنهاء",callback_data="perm_done")]
+        ]
+        await update.message.reply_text("اختر صلاحيات الأدمن الجديد (اضغط على كل زر لتحديده ثم إنهاء):", reply_markup=InlineKeyboardMarkup(perms_keyboard))
         return
-
-    if EDIT_CATEGORY and TEMP_KEY and not EDIT_OPTION:
-        BUTTON_REPLIES[EDIT_CATEGORY][TEMP_KEY] = {"text": update.message.text, "file": TEMP_FILE}
-        TEMP_KEY = None
-        TEMP_FILE = None
-        save_buttons()
-        await update.message.reply_text("✅ تم حفظ الزر بنجاح! استخدم /start لرؤية الزر الجديد.")
-        return
-
-    # تعديل زر موجود
-    if EDIT_CATEGORY and EDIT_KEY and EDIT_OPTION:
-        if EDIT_OPTION=="name":
-            BUTTON_REPLIES[EDIT_CATEGORY][update.message.text] = BUTTON_REPLIES[EDIT_CATEGORY].pop(EDIT_KEY)
-        elif EDIT_OPTION=="text":
-            BUTTON_REPLIES[EDIT_CATEGORY][EDIT_KEY]["text"] = update.message.text
-        EDIT_KEY = None
-        EDIT_OPTION = None
-        save_buttons()
-        await update.message.reply_text("✅ تم تعديل الزر بنجاح!")
 
 # ==========================
 def main():
@@ -277,5 +244,5 @@ def main():
     print("البوت يعمل الآن...")
     app.run_polling()
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
