@@ -2,8 +2,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFi
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import os, json
 
-BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع توكن البوت هنا
-MAIN_ADMIN_ID = 643482335  # أدمن رئيسي
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"
+MAIN_ADMIN_ID = 643482335
 
 DATA_FILE = "buttons.json"
 USERS_FILE = "users.json"
@@ -29,6 +29,7 @@ else:
     ADMINS = {str(MAIN_ADMIN_ID): {"permissions":["add","edit","delete","stats","manage_admins"]}}
 
 # ==========================
+# متغيرات مؤقتة لإدارة العمليات
 TEMP_CATEGORY = None
 TEMP_KEY = None
 TEMP_FILE = None
@@ -54,7 +55,6 @@ def save_admins():
 def has_permission(user_id, perm):
     return str(user_id) in ADMINS and perm in ADMINS[str(user_id)]["permissions"]
 
-# ==========================
 def split_button_text(text, max_len=20):
     """تقسيم النص الطويل للزر إلى سطرين إذا لزم"""
     if len(text) <= max_len:
@@ -101,8 +101,7 @@ async def show_main_menu(update, context, message=None):
 
 # ==========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY, EDIT_OPTION
-    global TEMP_ADMIN_ID, TEMP_ADMIN_PERMS
+    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
@@ -120,63 +119,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # --------------------
-    # الأدمنين
-    if str(user_id) in ADMINS:
-        # إضافة فئة
-        if data=="add_category" and has_permission(user_id,"add"):
-            TEMP_CATEGORY=None
-            await query.message.reply_text("✏️ أرسل اسم الفئة الجديدة:")
-            return
-        # تعديل فئة
-        elif data=="edit_category" and has_permission(user_id,"edit"):
-            keyboard=[[InlineKeyboardButton(split_button_text(cat),callback_data=f"editcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
-            keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
-            await query.message.reply_text("اختر الفئة لتعديلها:", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-        # حذف فئة
-        elif data=="delete_category" and has_permission(user_id,"delete"):
-            keyboard=[[InlineKeyboardButton(split_button_text(cat),callback_data=f"delcat_{cat}")] for cat in BUTTON_REPLIES.keys()]
-            keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
-            await query.message.reply_text("اختر الفئة للحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-        # الإحصائيات
-        elif data=="stats" and has_permission(user_id,"stats"):
-            num_users=len(USERS)
-            num_categories=len(BUTTON_REPLIES)
-            total_buttons=sum(len(v) for v in BUTTON_REPLIES.values())
-            usernames=[f"@{v['username']}" for v in USERS.values() if v['username']]
-            stats_text=f"📊 إحصائيات البوت:\nعدد المستخدمين:{num_users}\nعدد الفئات:{num_categories}\nعدد الأزرار:{total_buttons}\nالمستخدمون:\n"+"\n".join(usernames)
-            await query.message.reply_text(stats_text)
-            return
-        # إدارة الأدمن
-        elif data=="manage_admins" and has_permission(user_id,"manage_admins"):
-            keyboard=[
-                [InlineKeyboardButton("➕ إضافة أدمن", callback_data="add_new_admin")],
-                [InlineKeyboardButton("❌ حذف أدمن", callback_data="del_admin")],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
-            ]
-            await query.message.reply_text("👑 إدارة الأدمن: اختر العملية:", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-
-    # --------------------
-    # الطلاب والفئات
+    # واجهة فئات الطلاب + الأدمن
     if data.startswith("cat_"):
         category=data.replace("cat_","")
         keyboard=[]
+        # أزرار الطلاب
         for k in BUTTON_REPLIES.get(category,{}).keys():
             keyboard.append([InlineKeyboardButton(split_button_text(k), callback_data=f"userbtn_{category}_{k}")])
-        # إضافة أزرار إدارة للأدمن مباشرة داخل الفئة
+        # أزرار إدارة للأدمن داخل الفئة
         if str(user_id) in ADMINS:
             admin_row = [
                 InlineKeyboardButton("➕ إضافة زر", callback_data=f"addbtn_{category}"),
                 InlineKeyboardButton("📝 تعديل زر", callback_data=f"editbtn_{category}"),
-                InlineKeyboardButton("❌ حذف زر", callback_data=f"delbtn_{category}")
+                InlineKeyboardButton("❌ حذف زر", callback_data=f"delbtn_{category}"),
+                InlineKeyboardButton("🗂 إضافة محتوى للزر", callback_data=f"addcontent_{category}")
             ]
             keyboard.append(admin_row)
         keyboard.append([InlineKeyboardButton("🔙 رجوع",callback_data="back")])
         await query.message.edit_text(f"📂 فئة: {category}", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
+    # زر اختيار الطلاب للزر
     if data.startswith("userbtn_"):
         parts=data.replace("userbtn_","").split("_",1)
         category=parts[0]
@@ -190,6 +153,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_text(info.get("text",""))
         return
 
+    # أزرار إدارة الأدمن داخل الفئة
+    if str(user_id) in ADMINS:
+        # إضافة زر جديد
+        if data.startswith("addbtn_"):
+            TEMP_CATEGORY = data.replace("addbtn_","")
+            TEMP_KEY = None
+            await query.message.reply_text(f"✏️ أرسل اسم الزر الجديد في فئة {TEMP_CATEGORY}:")
+            return
+        # تعديل زر
+        if data.startswith("editbtn_"):
+            EDIT_CATEGORY = data.replace("editbtn_","")
+            keyboard=[[InlineKeyboardButton(split_button_text(k), callback_data=f"editbtnkey_{EDIT_CATEGORY}_{k}")] 
+                      for k in BUTTON_REPLIES.get(EDIT_CATEGORY,{})]
+            keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
+            await query.message.reply_text("اختر الزر لتعديله:", reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        # حذف زر
+        if data.startswith("delbtn_"):
+            EDIT_CATEGORY = data.replace("delbtn_","")
+            keyboard=[[InlineKeyboardButton(split_button_text(k), callback_data=f"delbtnkey_{EDIT_CATEGORY}_{k}")] 
+                      for k in BUTTON_REPLIES.get(EDIT_CATEGORY,{})]
+            keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
+            await query.message.reply_text("اختر الزر للحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        # إضافة محتوى للزر موجود
+        if data.startswith("addcontent_"):
+            TEMP_CATEGORY = data.replace("addcontent_","")
+            TEMP_KEY = None
+            await query.message.reply_text(f"✏️ أرسل اسم الزر لإضافة محتوى له في فئة {TEMP_CATEGORY}:")
+            return
+
+    # زر رجوع
     if data=="back":
         await show_main_menu(update, context)
         return
@@ -208,18 +203,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_path=f"files/{update.message.document.file_name}"
         await TEMP_FILE.download_to_drive(file_path)
         TEMP_FILE=file_path
-        await update.message.reply_text("✅ تم حفظ الملف، أرسل النص ليكمل الزر أو الفئة.")
+        if TEMP_CATEGORY and TEMP_KEY:
+            BUTTON_REPLIES[TEMP_CATEGORY][TEMP_KEY]["file"] = TEMP_FILE
+            save_buttons()
+        await update.message.reply_text("✅ تم رفع الملف بنجاح.")
         return
 
-    # إضافة فئة جديدة
-    if TEMP_CATEGORY is None:
-        TEMP_CATEGORY=update.message.text
-        if TEMP_CATEGORY not in BUTTON_REPLIES:
-            BUTTON_REPLIES[TEMP_CATEGORY]={}
-            save_buttons()
-            await update.message.reply_text(f"✅ تم إنشاء الفئة '{TEMP_CATEGORY}' بنجاح! الآن أرسل /start لإضافة أزرار داخلها.")
-        TEMP_CATEGORY=None
+    # إضافة زر جديد
+    if TEMP_CATEGORY and TEMP_KEY is None:
+        TEMP_KEY = update.message.text
+        BUTTON_REPLIES[TEMP_CATEGORY][TEMP_KEY] = {"text":"","file":None}
+        save_buttons()
+        await update.message.reply_text("✅ تم إنشاء الزر الجديد. أرسل نص الزر:")
         return
+
+    # إضافة محتوى للزر
+    if TEMP_CATEGORY and TEMP_KEY:
+        BUTTON_REPLIES[TEMP_CATEGORY][TEMP_KEY]["text"] = update.message.text
+        save_buttons()
+        await update.message.reply_text("✅ تم إضافة النص للزر. أرسل ملف PDF إذا أردت، أو /done للانتهاء.")
+        return
+
+    # إنهاء العملية
+    if update.message.text=="/done":
+        TEMP_CATEGORY = None
+        TEMP_KEY = None
+        TEMP_FILE = None
+        await update.message.reply_text("✅ تم الانتهاء من العملية.")
 
 # ==========================
 def main():
