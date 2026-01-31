@@ -3,7 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 # =======================
 # 🔑 التوكن الخاص بالبوت
-BOT_TOKEN = 8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"
 
 # 🛡️ رقم أدمن البوت (أنت فقط)
 ADMIN_ID = 643482335# ضع رقمك هنا
@@ -81,3 +81,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
