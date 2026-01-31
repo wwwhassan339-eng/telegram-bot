@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFi
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import os, json, asyncio
 
-BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع توكن جديد هنا
+BOT_TOKEN = "8460468406:AAGYBv7P5e-cwr-dG8rhJn4YU4MmEDfb-po"  # ضع توكن جديد هنا
 MAIN_ADMIN_ID = 643482335  # أدمن رئيسي
 
 DATA_FILE = "buttons.json"
@@ -368,3 +368,4 @@ async def run_bot():
 # ==========================
 if __name__ == "__main__":
     asyncio.run(run_bot())
+
