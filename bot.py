@@ -1,9 +1,9 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-import os, json, asyncio
+import os, json
 
 # ========================== إعدادات البوت ==========================
-BOT_TOKEN = "8460468406:AAGYBv7P5e-cwr-dG8rhJn4YU4MmEDfb-po"  # ضع التوكن هنا
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع التوكن هنا
 MAIN_ADMIN_ID = 643482335  # أدمن رئيسي
 
 DATA_FILE = "buttons.json"
@@ -39,8 +39,6 @@ def split_button_text(text, max_len=20):
 TEMP_CATEGORY = None
 TEMP_KEY = None
 TEMP_FILE = None
-EDIT_CATEGORY = None
-EDIT_KEY = None
 
 # ========================== تسجيل مستخدم جديد ==========================
 async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -70,7 +68,6 @@ async def show_main_menu(update, context, message=None):
     user_id = update.effective_user.id
     keyboard, row = [], []
 
-    # أزرار الفئات
     for category in BUTTON_REPLIES.keys():
         row.append(InlineKeyboardButton(split_button_text(category), callback_data=f"cat_{category}"))
         if len(row) == 2:
@@ -78,7 +75,6 @@ async def show_main_menu(update, context, message=None):
             row = []
     if row: keyboard.append(row)
 
-    # أزرار الأدمن
     if str(user_id) in ADMINS:
         admin_row = [
             InlineKeyboardButton("➕ إضافة فئة", callback_data="add_category"),
@@ -104,10 +100,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await register_user(update, context)
     await show_main_menu(update, context)
 
-# ========================== Handlers ==========================
-
+# ========================== Button Handler ==========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY
+    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE
     query = update.callback_query
     await query.answer()
     data = query.data
@@ -123,7 +118,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # اختيار فئة
     if data.startswith("cat_"):
         category = data.replace("cat_", "")
-        keyboard = [[InlineKeyboardButton(split_button_text(k), callback_data=f"userbtn_{category}_{k}")] 
+        keyboard = [[InlineKeyboardButton(split_button_text(k), callback_data=f"userbtn_{category}_{k}")]
                     for k in BUTTON_REPLIES.get(category, {})]
         if str(user_id) in ADMINS:
             admin_row = [
@@ -139,7 +134,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # اختيار زر المستخدم
     if data.startswith("userbtn_"):
-        parts = data.replace("userbtn_", "").split("_",1)
+        parts = data.replace("userbtn_", "").split("_", 1)
         category, key = parts[0], parts[1]
         info = BUTTON_REPLIES.get(category, {}).get(key, {})
         if info.get("file"):
@@ -166,7 +161,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"✏️ أرسل اسم الزر لإضافة محتوى له في فئة {TEMP_CATEGORY}:")
             return
 
-# ---- استقبال الرسائل ----
+# ========================== Message Handler ==========================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE
     user_id = update.effective_user.id
@@ -213,7 +208,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ تم الانتهاء من العملية.")
 
 # ========================== تشغيل البوت ==========================
-async def run_bot():
+if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -222,8 +217,4 @@ async def run_bot():
     app.add_handler(MessageHandler(filters.Document.ALL, handle_message))
 
     print("البوت يعمل الآن...")
-    await app.run_polling()
-
-# ========================== main ==========================
-if __name__ == "__main__":
-    asyncio.run(run_bot())
+    app.run_polling()  # ✅ هذه الطريقة النهائية لتجنب RuntimeWarning و Cannot close a running event loop
