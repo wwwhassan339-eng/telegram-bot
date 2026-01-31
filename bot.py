@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import os, json
+import asyncio
 
 # ========================== إعدادات البوت ==========================
 BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع التوكن هنا
@@ -110,12 +111,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await register_user(update, context)
 
-    # العودة للقائمة الرئيسية
     if data == "back":
         await show_main_menu(update, context)
         return
 
-    # اختيار فئة
     if data.startswith("cat_"):
         category = data.replace("cat_", "")
         keyboard = [[InlineKeyboardButton(split_button_text(k), callback_data=f"userbtn_{category}_{k}")]
@@ -132,7 +131,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(f"📂 فئة: {category}", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # اختيار زر المستخدم
     if data.startswith("userbtn_"):
         parts = data.replace("userbtn_", "").split("_", 1)
         category, key = parts[0], parts[1]
@@ -148,7 +146,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_text(info.get("text",""))
         return
 
-    # إدارة الأدمن: إضافة زر/تعديل/حذف/إضافة محتوى
     if str(user_id) in ADMINS:
         if data.startswith("addbtn_"):
             TEMP_CATEGORY = data.replace("addbtn_", "")
@@ -168,7 +165,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(user_id) not in ADMINS:
         return
 
-    # استقبال ملف PDF
     if update.message.document:
         TEMP_FILE = await update.message.document.get_file()
         os.makedirs("files", exist_ok=True)
@@ -185,7 +181,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ تم رفع الملف بنجاح.")
         return
 
-    # إضافة زر جديد
     if TEMP_CATEGORY and TEMP_KEY is None:
         TEMP_KEY = update.message.text
         BUTTON_REPLIES[TEMP_CATEGORY][TEMP_KEY] = {"text":"", "file":None}
@@ -193,14 +188,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ تم إنشاء الزر الجديد. أرسل نص الزر:")
         return
 
-    # إضافة محتوى للزر
     if TEMP_CATEGORY and TEMP_KEY:
         BUTTON_REPLIES[TEMP_CATEGORY][TEMP_KEY]["text"] = update.message.text
         save_buttons()
         await update.message.reply_text("✅ تم إضافة النص للزر. أرسل ملف PDF إذا أردت، أو /done للانتهاء.")
         return
 
-    # إنهاء العملية
     if update.message.text == "/done":
         TEMP_CATEGORY = None
         TEMP_KEY = None
@@ -217,4 +210,8 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.Document.ALL, handle_message))
 
     print("البوت يعمل الآن...")
-    app.run_polling()  # ✅ هذه الطريقة النهائية لتجنب RuntimeWarning و Cannot close a running event loop
+
+    # ✅ طريقة نهائية للعمل على Railway/Docker
+    loop = asyncio.get_event_loop()
+    loop.create_task(app.run_polling())
+    loop.run_forever()
