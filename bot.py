@@ -3,20 +3,20 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 # =======================
 # 🔑 التوكن الخاص بالبوت
-BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع التوكن هنا بين علامتي اقتباس
 
 # 🛡️ رقم أدمن البوت (أنت فقط)
-ADMIN_ID = 643482335# ضع رقمك هنا
+ADMIN_ID = 643482335  # ضع رقم حسابك هنا
 
 # =======================
 # النصوص الخاصة بالأزرار
-# يمكنك إضافة زر جديد أو حذف أي زر بسهولة هنا
+# كل زر: الاسم الداخلي للزر + النص الذي يراه الطالب
+# يمكنك إضافة أي زر جديد أو حذف أي زر لاحقًا من تيليجرام باستخدام /set
 BUTTON_REPLIES = {
-    "info": "ℹ️ هذا نص المعلومات الافتراضي",
-    "help": "❓ هذا نص المساعدة الافتراضي",
-    "contact": "📞 هذا نص التواصل الافتراضي"
-    # مثال لإضافة زر جديد:
-    # "lectures": "📚 هذه نص المحاضرات"
+    "info": "ℹ️ معلومات عن البوت: هذا بوت مجاني للطلاب",
+    "help": "❓ تعليمات: اضغط على الأزرار لاختيار المحاضرات أو التواصل",
+    "contact": "📞 للتواصل: @YourUsername",
+    "lectures": "📚 المحاضرات:\n1️⃣ محاضرة الوراثة\n2️⃣ محاضرة الأحياء المجهرية\n3️⃣ محاضرة الكيمياء الحيوية"
 }
 
 # =======================
@@ -27,8 +27,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # إنشاء الأزرار تلقائيًا من BUTTON_REPLIES
     for key, data in BUTTON_REPLIES.items():
-        row.append(InlineKeyboardButton(data.split("\n")[0], callback_data=key))  # نأخذ أول سطر فقط كاسم الزر
-        if len(row) == 2:
+        # الاسم الذي يظهر على الزر هو أول سطر من النص
+        first_line = data.split("\n")[0]
+        row.append(InlineKeyboardButton(first_line, callback_data=key))
+        if len(row) == 2:  # صفين لكل صفين أزرار
             keyboard.append(row)
             row = []
     if row:
@@ -54,10 +56,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # أمر /set لتغيير نصوص الأزرار من داخل البوت (أنت فقط)
 async def set_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return
+        return  # أي شخص آخر لا يستطيع التحكم
 
     if len(context.args) < 2:
-        await update.message.reply_text("الاستخدام:\n/set info النص الجديد")
+        await update.message.reply_text("الاستخدام:\n/set اسم_الزر النص_الجديد")
         return
 
     key = context.args[0]
@@ -67,7 +69,7 @@ async def set_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         BUTTON_REPLIES[key] = new_text
         await update.message.reply_text("✅ تم التعديل بنجاح")
     else:
-        await update.message.reply_text("❌ هذا الزر غير موجود")
+        await update.message.reply_text("❌ هذا الزر غير موجود، تحقق من الاسم الداخلي للزر")
 
 # =======================
 # تشغيل البوت
@@ -81,4 +83,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
