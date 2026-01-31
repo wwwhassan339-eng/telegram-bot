@@ -2,14 +2,15 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFi
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import os, json
 
-BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"
-MAIN_ADMIN_ID = 643482335
+BOT_TOKEN = "8495189316:AAGAzS9MTMfal703P-ncF7xMedg2RxqMBbo"  # ضع توكن البوت هنا
+MAIN_ADMIN_ID = 643482335  # أدمن رئيسي
 
 DATA_FILE = "buttons.json"
 USERS_FILE = "users.json"
 ADMINS_FILE = "admins.json"
 
 # ==========================
+# تحميل البيانات أو تهيئتها إذا غير موجودة
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         BUTTON_REPLIES = json.load(f)
@@ -29,7 +30,7 @@ else:
     ADMINS = {str(MAIN_ADMIN_ID): {"permissions":["add","edit","delete","stats","manage_admins"]}}
 
 # ==========================
-# متغيرات مؤقتة لإدارة العمليات
+# متغيرات مؤقتة للعمليات
 TEMP_CATEGORY = None
 TEMP_KEY = None
 TEMP_FILE = None
@@ -40,6 +41,7 @@ TEMP_ADMIN_ID = None
 TEMP_ADMIN_PERMS = []
 
 # ==========================
+# دوال الحفظ
 def save_buttons():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(BUTTON_REPLIES, f, ensure_ascii=False, indent=2)
@@ -55,6 +57,7 @@ def save_admins():
 def has_permission(user_id, perm):
     return str(user_id) in ADMINS and perm in ADMINS[str(user_id)]["permissions"]
 
+# ==========================
 def split_button_text(text, max_len=20):
     """تقسيم النص الطويل للزر إلى سطرين إذا لزم"""
     if len(text) <= max_len:
@@ -80,6 +83,7 @@ async def show_main_menu(update, context, message=None):
     if row:
         keyboard.append(row)
 
+    # أزرار إدارة الأدمن
     if str(update.effective_user.id) in ADMINS:
         admin_row = [
             InlineKeyboardButton("➕ إضافة فئة", callback_data="add_category"),
@@ -101,7 +105,7 @@ async def show_main_menu(update, context, message=None):
 
 # ==========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE
+    global TEMP_CATEGORY, TEMP_KEY, TEMP_FILE, EDIT_CATEGORY, EDIT_KEY
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
@@ -119,14 +123,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # --------------------
-    # واجهة فئات الطلاب + الأدمن
+    # فئات الطلاب
     if data.startswith("cat_"):
         category=data.replace("cat_","")
         keyboard=[]
-        # أزرار الطلاب
         for k in BUTTON_REPLIES.get(category,{}).keys():
             keyboard.append([InlineKeyboardButton(split_button_text(k), callback_data=f"userbtn_{category}_{k}")])
-        # أزرار إدارة للأدمن داخل الفئة
+        # أزرار إدارة الأدمن داخل الفئة
         if str(user_id) in ADMINS:
             admin_row = [
                 InlineKeyboardButton("➕ إضافة زر", callback_data=f"addbtn_{category}"),
@@ -139,7 +142,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(f"📂 فئة: {category}", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # زر اختيار الطلاب للزر
+    # زر اختيار الطلاب
     if data.startswith("userbtn_"):
         parts=data.replace("userbtn_","").split("_",1)
         category=parts[0]
@@ -184,7 +187,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"✏️ أرسل اسم الزر لإضافة محتوى له في فئة {TEMP_CATEGORY}:")
             return
 
-    # زر رجوع
     if data=="back":
         await show_main_menu(update, context)
         return
